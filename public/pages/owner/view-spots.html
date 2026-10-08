@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>车位查询 - 小区车位管理系统</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">🚗 小区车位管理系统</div>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">🏠 工作台</a></li>
+      <li><a href="apply-parking.html">📝 申请车位</a></li>
+      <li><a href="view-spots.html" class="active">🚗 车位查询</a></li>
+      <li><a href="my-parking.html">✅ 我的车位</a></li>
+    </ul>
+    <div class="user-info">
+      <span id="userName">业主</span>
+      <span class="role-badge owner">业主</span>
+      <button class="btn btn-sm btn-outline" onclick="logout()">退出</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="card">
+      <div class="card-header">
+        <h3>🚗 小区车位列表</h3>
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="🔍 搜索车位编号..." oninput="filterSpots()">
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>编号</th><th>区域</th><th>楼层</th><th>状态</th><th>月租金</th><th>备注</th></tr></thead>
+          <tbody id="spotTableBody"><tr><td colspan="6" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../js/main.js"></script>
+  <script>
+    let allSpots = [];
+
+    async function init() {
+      const user = await checkLogin();
+      if (!user || user.role !== 'owner') {
+        showToast('请先登录业主账号', 'error');
+        setTimeout(() => window.location.href = '/index.html', 500);
+        return;
+      }
+      document.getElementById('userName').textContent = user.name;
+      await loadSpots();
+    }
+
+    async function loadSpots() {
+      const res = await api('/owner/all-spots');
+      const body = document.getElementById('spotTableBody');
+
+      if (res.success && res.data && res.data.length > 0) {
+        allSpots = res.data;
+        renderSpots(allSpots);
+      } else {
+        allSpots = [];
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">暂无车位信息</td></tr>';
+      }
+    }
+
+    function renderSpots(spots) {
+      const body = document.getElementById('spotTableBody');
+      body.innerHTML = spots.map(s => `
+        <tr>
+          <td>🚗 ${escapeHtml(s.spot_code)}</td>
+          <td>${escapeHtml(s.area || '-')}</td>
+          <td>${escapeHtml(s.floor || '-')}</td>
+          <td><span class="status-badge ${s.status === 'available' ? 'approved' : 'pending'}">${s.status === 'available' ? '空闲' : '已占用'}</span></td>
+          <td>¥${Number(s.price || 0).toFixed(2)}</td>
+          <td>${escapeHtml(s.remark || '-')}</td>
+        </tr>
+      `).join('');
+    }
+
+    function filterSpots() {
+      const keyword = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allSpots.filter(s => s.spot_code.toLowerCase().includes(keyword));
+      renderSpots(filtered);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    init();
+  </script>
+</body>
+</html>

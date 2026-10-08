@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>物业代表工作台 - 小区车位管理系统</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">🚗 小区车位管理系统</div>
+    <ul class="nav-links">
+      <li><a href="dashboard.html" class="active">🏢 工作台</a></li>
+      <li><a href="process-applications.html">📋 处理申请</a></li>
+      <li><a href="my-reviews.html">✅ 我的处理记录</a></li>
+    </ul>
+    <div class="user-info">
+      <span id="userName">物业代表</span>
+      <span class="role-badge representative">物业代表</span>
+      <button class="btn btn-sm btn-outline" onclick="logout()">退出</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="stats-grid" style="margin-bottom:30px;">
+      <div class="stat-card" onclick="location.href='process-applications.html'" style="cursor:pointer;">
+        <div class="icon blue">📋</div>
+        <div class="info"><div class="count" style="font-size:18px;">处理申请</div><div class="label">审核业主提交的车位申请</div></div>
+      </div>
+      <div class="stat-card" onclick="location.href='my-reviews.html'" style="cursor:pointer;">
+        <div class="icon purple">✅</div>
+        <div class="info"><div class="count" style="font-size:18px;">处理记录</div><div class="label">查看我的历史处理记录</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>待处理申请</h3>
+        <a href="process-applications.html" class="btn btn-sm btn-outline">查看全部</a>
+      </div>
+      <div id="pendingApplications">
+        <div class="empty-state"><div class="icon">⏳</div><p>加载中...</p></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../js/main.js"></script>
+  <script>
+    async function init() {
+      const user = await checkLogin();
+      if (!user || user.role !== 'representative') {
+        showToast('请先登录物业代表账号', 'error');
+        setTimeout(() => window.location.href = '/index.html', 500);
+        return;
+      }
+      document.getElementById('userName').textContent = user.name;
+      await loadPendingApplications();
+    }
+
+    async function loadPendingApplications() {
+      const res = await api('/representative/pending-applications');
+      const container = document.getElementById('pendingApplications');
+
+      if (res.success && res.data && res.data.length > 0) {
+        const showing = res.data.slice(0, 5);
+        container.innerHTML = showing.map(app => `
+          <div class="message-item">
+            <div class="msg-header">
+              <span class="msg-title">🚗 ${escapeHtml(app.spot_code)} - ${escapeHtml(app.owner_name || '未知')}</span>
+              <span class="status-badge pending">待审核</span>
+            </div>
+            <div class="msg-content">申请理由: ${escapeHtml(app.reason || '无')}</div>
+            <div class="msg-meta">
+              申请人: ${escapeHtml(app.owner_name || '未知')} | ${app.building || ''} ${app.unit || ''} | ${formatDate(app.created_at)}
+            </div>
+            <div class="msg-actions" style="margin-top:10px;">
+              <button class="btn btn-sm btn-success" onclick="reviewApp(${app.id}, 'approve')">✅ 通过</button>
+              <button class="btn btn-sm btn-danger" onclick="reviewApp(${app.id}, 'reject')">❌ 拒绝</button>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无待处理申请</p></div>';
+      }
+    }
+
+    async function reviewApp(appId, action) {
+      const comment = action === 'reject' ? prompt('请输入拒绝原因（可选）：') : '';
+      if (action === 'reject' && comment === null) return;
+
+      const res = await api('/representative/review-application', {
+        method: 'POST',
+        body: { appId: appId, action, comment }
+      });
+
+      if (res.success) {
+        showToast(res.message, 'success');
+        await loadPendingApplications();
+      } else {
+        showToast(res.message, 'error');
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    init();
+  </script>
+</body>
+</html>

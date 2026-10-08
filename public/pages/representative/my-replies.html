@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的回复 - 小区论坛管理系统</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">🏘️ 小区论坛管理系统</div>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">🏢 工作台</a></li>
+      <li><a href="reply-messages.html">💬 回复消息</a></li>
+      <li><a href="my-replies.html" class="active">📋 我的回复</a></li>
+    </ul>
+    <div class="user-info">
+      <span id="userName">物业代表</span>
+      <span class="role-badge representative">物业代表</span>
+      <button class="btn btn-sm btn-outline" onclick="logout()">退出</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="card">
+      <div class="card-header">
+        <h3>📋 我的回复记录</h3>
+        <span id="replyCount" style="color:#999;font-size:14px;"></span>
+      </div>
+      <div id="replyList" class="message-list">
+        <div class="empty-state"><div class="icon">⏳</div><p>加载中...</p></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../js/main.js"></script>
+  <script>
+    async function init() {
+      const user = await checkLogin();
+      if (!user || user.role !== 'representative') {
+        showToast('请先登录物业代表账号', 'error');
+        setTimeout(() => window.location.href = '/index.html', 500);
+        return;
+      }
+      document.getElementById('userName').textContent = user.name;
+      await loadMyReplies();
+    }
+
+    async function loadMyReplies() {
+      const res = await api('/representative/my-replies');
+      const container = document.getElementById('replyList');
+
+      if (res.success && res.data && res.data.length > 0) {
+        document.getElementById('replyCount').textContent = `共 ${res.data.length} 条回复`;
+        container.innerHTML = res.data.map(r => `
+          <div class="message-item" style="border-left-color:#3498db;">
+            <div class="msg-header">
+              <span class="msg-title">📌 原消息: ${escapeHtml(r.message_title || '已删除')}</span>
+              <span style="font-size:12px;color:#999;">${formatDate(r.created_at)}</span>
+            </div>
+            <div class="msg-content">💬 ${escapeHtml(r.content)}</div>
+          </div>
+        `).join('');
+      } else {
+        document.getElementById('replyCount').textContent = '';
+        container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>您还没有回复过任何消息</p></div>';
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    init();
+  </script>
+</body>
+</html>

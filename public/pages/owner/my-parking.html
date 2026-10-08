@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的车位 - 小区车位管理系统</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">🚗 小区车位管理系统</div>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">🏠 工作台</a></li>
+      <li><a href="apply-parking.html">📝 申请车位</a></li>
+      <li><a href="view-spots.html">🚗 车位查询</a></li>
+      <li><a href="my-parking.html" class="active">✅ 我的车位</a></li>
+    </ul>
+    <div class="user-info">
+      <span id="userName">业主</span>
+      <span class="role-badge owner">业主</span>
+      <button class="btn btn-sm btn-outline" onclick="logout()">退出</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="card">
+      <div class="card-header">
+        <h3>✅ 我的车位</h3>
+      </div>
+      <div id="myAssignment">
+        <div class="empty-state"><div class="icon">⏳</div><p>加载中...</p></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>📝 我的申请记录</h3>
+        <span id="appCount" style="color:#999;font-size:14px;"></span>
+      </div>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('all')">全部</button>
+        <button class="tab-btn" onclick="switchTab('pending')">⏳ 待审核</button>
+        <button class="tab-btn" onclick="switchTab('approved')">✅ 已通过</button>
+        <button class="tab-btn" onclick="switchTab('rejected')">❌ 已拒绝</button>
+      </div>
+      <div id="applicationList" class="message-list">
+        <div class="empty-state"><div class="icon">⏳</div><p>加载中...</p></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../js/main.js"></script>
+  <script>
+    let allApplications = [];
+    let currentTab = 'all';
+
+    async function init() {
+      const user = await checkLogin();
+      if (!user || user.role !== 'owner') {
+        showToast('请先登录业主账号', 'error');
+        setTimeout(() => window.location.href = '/index.html', 500);
+        return;
+      }
+      document.getElementById('userName').textContent = user.name;
+      await loadMyAssignment();
+      await loadMyApplications();
+    }
+
+    async function loadMyAssignment() {
+      const res = await api('/owner/my-assignment');
+      const container = document.getElementById('myAssignment');
+
+      if (res.success && res.assignment) {
+        const a = res.assignment;
+        container.innerHTML = `
+          <div class="message-item" style="border-left-color:#2ecc71;">
+            <div class="msg-header">
+              <span class="msg-title">🚗 ${escapeHtml(a.spot_code)}</span>
+              <span class="status-badge approved">已分配</span>
+            </div>
+            <div style="margin-top:10px;">
+              <p><strong>区域:</strong> ${escapeHtml(a.area || '-')}</p>
+              <p><strong>楼层:</strong> ${escapeHtml(a.floor || '-')}</p>
+              <p><strong>月租金:</strong> ¥${Number(a.price || 0).toFixed(2)}</p>
+              <p><strong>备注:</strong> ${escapeHtml(a.remark || '-')}</p>
+              <p><strong>租期:</strong> ${formatDate(a.start_date)} 至 ${formatDate(a.end_date)}</p>
+            </div>
+          </div>
+        `;
+      } else {
+        container.innerHTML = '<div class="empty-state"><div class="icon">🚗</div><p>您还没有分配到车位</p><p style="font-size:13px;margin-top:5px;color:#667eea;">请点击上方"申请车位"按钮提交申请</p></div>';
+      }
+    }
+
+    async function loadMyApplications() {
+      const res = await api('/owner/my-applications');
+      const container = document.getElementById('applicationList');
+
+      if (res.success && res.data && res.data.length > 0) {
+        allApplications = res.data;
+        document.getElementById('appCount').textContent = `共 ${res.data.length} 条记录`;
+        renderApplications();
+      } else {
+        allApplications = [];
+        document.getElementById('appCount').textContent = '';
+        container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>您还没有提交过申请</p></div>';
+      }
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      renderApplications();
+    }
+
+    function renderApplications() {
+      const container = document.getElementById('applicationList');
+      let filtered = allApplications;
+
+      if (currentTab !== 'all') {
+        filtered = allApplications.filter(a => a.status === currentTab);
+      }
+
+      if (filtered.length === 0) {
+        const emptyText = { pending: '待审核', approved: '已通过', rejected: '已拒绝' };
+        container.innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>暂无${emptyText[currentTab] || ''}申请</p></div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(app => {
+        const statusClass = app.status === 'pending' ? 'pending' : (app.status === 'approved' ? 'approved' : 'rejected');
+        const statusText = app.status === 'pending' ? '待审核' : (app.status === 'approved' ? '已通过' : '已拒绝');
+        const statusIcon = app.status === 'pending' ? '⏳' : (app.status === 'approved' ? '✅' : '❌');
+
+        return `
+          <div class="message-item" style="border-left-color:${
+            app.status === 'pending' ? '#f39c12' : (app.status === 'approved' ? '#2ecc71' : '#e74c3c')
+          };">
+            <div class="msg-header">
+              <span class="msg-title">🚗 ${escapeHtml(app.spot_code)}</span>
+              <span class="status-badge ${statusClass}">${statusIcon} ${statusText}</span>
+            </div>
+            <div class="msg-content">申请理由: ${escapeHtml(app.reason || '无')}</div>
+            <div class="msg-meta">申请时间: ${formatDate(app.created_at)}</div>
+            ${app.review_comment ? `<div style="margin-top:8px;font-size:13px;color:#666;">审核意见: ${escapeHtml(app.review_comment)}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    init();
+  </script>
+</body>
+</html>

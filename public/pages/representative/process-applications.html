@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>处理申请 - 小区车位管理系统</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">🚗 小区车位管理系统</div>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">🏢 工作台</a></li>
+      <li><a href="process-applications.html" class="active">📋 处理申请</a></li>
+      <li><a href="my-reviews.html">✅ 我的处理记录</a></li>
+    </ul>
+    <div class="user-info">
+      <span id="userName">物业代表</span>
+      <span class="role-badge representative">物业代表</span>
+      <button class="btn btn-sm btn-outline" onclick="logout()">退出</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="card">
+      <div class="card-header">
+        <h3>📋 待处理申请列表</h3>
+        <span id="appCount" style="color:#999;font-size:14px;"></span>
+      </div>
+      <div id="pendingList" class="message-list">
+        <div class="empty-state"><div class="icon">⏳</div><p>加载中...</p></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../js/main.js"></script>
+  <script>
+    async function init() {
+      const user = await checkLogin();
+      if (!user || user.role !== 'representative') {
+        showToast('请先登录物业代表账号', 'error');
+        setTimeout(() => window.location.href = '/index.html', 500);
+        return;
+      }
+      document.getElementById('userName').textContent = user.name;
+      await loadApplications();
+    }
+
+    async function loadApplications() {
+      const res = await api('/representative/pending-applications');
+      const container = document.getElementById('pendingList');
+
+      if (res.success && res.data && res.data.length > 0) {
+        document.getElementById('appCount').textContent = `共 ${res.data.length} 条待处理`;
+        container.innerHTML = res.data.map(app => `
+          <div class="message-item" id="app-${app.id}">
+            <div class="msg-header">
+              <span class="msg-title">🚗 ${escapeHtml(app.spot_code)}</span>
+              <span class="status-badge ${app.status === 'pending' ? 'pending' : (app.status === 'approved' ? 'approved' : 'rejected')}">${statusText(app.status)}</span>
+            </div>
+            <div class="msg-content">申请理由: ${escapeHtml(app.reason || '无')}</div>
+            <div class="msg-meta">
+              申请人: ${escapeHtml(app.owner_name || '未知')} | ${app.building || ''} ${app.unit || ''} | ${formatDate(app.created_at)}
+            </div>
+            ${app.status === 'pending' ? `
+            <div class="msg-actions" style="margin-top:12px;">
+              <button class="btn btn-success" onclick="reviewApp(${app.id}, 'approve')">✅ 审核通过</button>
+              <button class="btn btn-danger" onclick="reviewApp(${app.id}, 'reject')">❌ 拒绝</button>
+            </div>
+            ` : ''}
+          </div>
+        `).join('');
+      } else {
+        document.getElementById('appCount').textContent = '';
+        container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无待处理申请</p></div>';
+      }
+    }
+
+    async function reviewApp(appId, action) {
+      let comment = '';
+      if (action === 'reject') {
+        comment = prompt('请输入拒绝原因（可选）：');
+        if (comment === null) return;
+      }
+
+      const res = await api('/representative/review-application', {
+        method: 'POST',
+        body: { appId: appId, action, comment }
+      });
+
+      if (res.success) {
+        showToast(res.message, 'success');
+        await loadApplications();
+      } else {
+        showToast(res.message, 'error');
+      }
+    }
+
+    function statusText(s) {
+      return s === 'pending' ? '待审核' : s === 'approved' ? '已通过' : '已拒绝';
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    init();
+  </script>
+</body>
+</html>

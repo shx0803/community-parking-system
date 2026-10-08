@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理员工作台 - 小区车位管理系统</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">🚗 小区车位管理系统</div>
+    <ul class="nav-links">
+      <li><a href="dashboard.html" class="active">📊 工作台</a></li>
+      <li><a href="review-applications.html">📋 审核申请</a></li>
+      <li><a href="manage-users.html">👥 用户管理</a></li>
+      <li><a href="parking-management.html">🚗 车位管理</a></li>
+    </ul>
+    <div class="user-info">
+      <span id="userName">管理员</span>
+      <span class="role-badge admin">管理员</span>
+      <button class="btn btn-sm btn-outline" onclick="logout()">退出</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card">
+        <div class="icon orange">📋</div>
+        <div class="info"><div class="count" id="pendingCount">0</div><div class="label">待审核申请</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="icon green">🚗</div>
+        <div class="info"><div class="count" id="spotCount">0</div><div class="label">总车位数</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="icon blue">✅</div>
+        <div class="info"><div class="count" id="occupiedCount">0</div><div class="label">已占用车位</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="icon purple">👥</div>
+        <div class="info"><div class="count" id="ownerCount">0</div><div class="label">业主数量</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>待审核申请</h3>
+        <a href="review-applications.html" class="btn btn-sm btn-outline">查看全部</a>
+      </div>
+      <div id="pendingList" class="message-list">
+        <div class="empty-state"><div class="icon">📭</div><p>暂无待审核申请</p></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../js/main.js"></script>
+  <script>
+    let currentUser = null;
+
+    async function init() {
+      currentUser = await checkLogin();
+      if (!currentUser || currentUser.role !== 'admin') {
+        showToast('请先登录管理员账号', 'error');
+        setTimeout(() => window.location.href = '/index.html', 500);
+        return;
+      }
+
+      document.getElementById('userName').textContent = currentUser.name;
+      await loadStats();
+      await loadPendingApplications();
+    }
+
+    async function loadStats() {
+      const res = await api('/admin/stats');
+      if (res.success) {
+        document.getElementById('pendingCount').textContent = res.data.pendingCount;
+        document.getElementById('spotCount').textContent = res.data.spotCount;
+        document.getElementById('occupiedCount').textContent = res.data.occupiedCount;
+        document.getElementById('ownerCount').textContent = res.data.ownerCount;
+      }
+    }
+
+    async function loadPendingApplications() {
+      const res = await api('/admin/pending-applications');
+      const container = document.getElementById('pendingList');
+
+      if (res.success && res.data && res.data.length > 0) {
+        const showing = res.data.slice(0, 5);
+        container.innerHTML = showing.map(app => `
+          <div class="message-item">
+            <div class="msg-header">
+              <span class="msg-title">🚗 ${escapeHtml(app.spot_code)} - ${escapeHtml(app.owner_name || '未知')}</span>
+              <span class="status-badge pending">待审核</span>
+            </div>
+            <div class="msg-content">申请理由: ${escapeHtml(app.reason || '无')}</div>
+            <div class="msg-meta">
+              申请人: ${escapeHtml(app.owner_name || '未知')} | ${app.building || ''} ${app.unit || ''} | ${formatDate(app.created_at)}
+            </div>
+            <div class="msg-actions" style="margin-top:10px;">
+              <button class="btn btn-sm btn-success" onclick="reviewApp(${app.id}, 'approve')">✅ 通过</button>
+              <button class="btn btn-sm btn-danger" onclick="reviewApp(${app.id}, 'reject')">❌ 拒绝</button>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无待审核申请</p></div>';
+      }
+    }
+
+    async function reviewApp(appId, action) {
+      const comment = action === 'reject' ? prompt('请输入拒绝原因（可选）：') : '';
+      if (action === 'reject' && comment === null) return;
+
+      const res = await api('/admin/review-application', {
+        method: 'POST',
+        body: { appId: appId, action, comment }
+      });
+
+      if (res.success) {
+        showToast(res.message, 'success');
+        await loadStats();
+        await loadPendingApplications();
+      } else {
+        showToast(res.message, 'error');
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    init();
+  </script>
+</body>
+</html>

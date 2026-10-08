@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>车位管理 - 小区车位管理系统</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">🚗 小区车位管理系统</div>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">📊 工作台</a></li>
+      <li><a href="review-applications.html">📋 审核申请</a></li>
+      <li><a href="manage-users.html">👥 用户管理</a></li>
+      <li><a href="parking-management.html" class="active">🚗 车位管理</a></li>
+    </ul>
+    <div class="user-info">
+      <span id="userName">管理员</span>
+      <span class="role-badge admin">管理员</span>
+      <button class="btn btn-sm btn-outline" onclick="logout()">退出</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="modal-overlay" id="spotModal" style="display:none;">
+      <div class="modal">
+        <h3 id="modalTitle">🚗 添加车位</h3>
+        <form id="spotForm">
+          <input type="hidden" id="spotId">
+          <div class="form-group">
+            <label>车位编号 *</label>
+            <input type="text" id="spotCode" placeholder="如：A001" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>区域</label>
+              <input type="text" id="spotArea" placeholder="如：A区">
+            </div>
+            <div class="form-group">
+              <label>楼层</label>
+              <input type="text" id="spotFloor" placeholder="如：地下一层">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>月租金（元）</label>
+            <input type="number" id="spotPrice" placeholder="0.00" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>备注</label>
+            <textarea id="spotRemark" placeholder="车位备注信息..." rows="3"></textarea>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-outline" onclick="closeSpotModal()">取消</button>
+            <button type="submit" class="btn btn-primary">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>🚗 车位列表</h3>
+        <button class="btn btn-primary" onclick="openSpotModal()">➕ 添加车位</button>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>编号</th><th>区域</th><th>楼层</th><th>状态</th><th>月租金</th><th>备注</th><th>操作</th></tr></thead>
+          <tbody id="spotTableBody"><tr><td colspan="7" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>📋 车位分配记录</h3>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>业主</th><th>楼栋</th><th>车位编号</th><th>开始日期</th><th>结束日期</th><th>操作</th></tr></thead>
+          <tbody id="assignmentTableBody"><tr><td colspan="6" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../js/main.js"></script>
+  <script>
+    async function init() {
+      const user = await checkLogin();
+      if (!user || user.role !== 'admin') {
+        showToast('请先登录管理员账号', 'error');
+        setTimeout(() => window.location.href = '/index.html', 500);
+        return;
+      }
+      document.getElementById('userName').textContent = user.name;
+      await loadSpots();
+      await loadAssignments();
+    }
+
+    async function loadSpots() {
+      const res = await api('/admin/parking-spots');
+      const body = document.getElementById('spotTableBody');
+      if (res.success && res.data && res.data.length > 0) {
+        body.innerHTML = res.data.map(s => `
+          <tr>
+            <td>${escapeHtml(s.spot_code)}</td>
+            <td>${escapeHtml(s.area || '-')}</td>
+            <td>${escapeHtml(s.floor || '-')}</td>
+            <td><span class="status-badge ${s.status === 'available' ? 'approved' : 'pending'}">${s.status === 'available' ? '空闲' : '已占用'}</span></td>
+            <td>¥${Number(s.price || 0).toFixed(2)}</td>
+            <td>${escapeHtml(s.remark || '-')}</td>
+            <td>
+              <button class="btn btn-sm btn-outline" onclick="editSpot(${s.id})">编辑</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteSpot(${s.id}, '${escapeHtml(s.spot_code)}')">删除</button>
+            </td>
+          </tr>
+        `).join('');
+      } else {
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">暂无车位</td></tr>';
+      }
+    }
+
+    async function loadAssignments() {
+      const res = await api('/admin/parking-assignments');
+      const body = document.getElementById('assignmentTableBody');
+      if (res.success && res.data && res.data.length > 0) {
+        body.innerHTML = res.data.map(a => `
+          <tr>
+            <td>${escapeHtml(a.owner_name)}</td>
+            <td>${escapeHtml(a.building || '')} ${escapeHtml(a.unit || '')}</td>
+            <td>🚗 ${escapeHtml(a.spot_code)}</td>
+            <td>${formatDate(a.start_date)}</td>
+            <td>${formatDate(a.end_date)}</td>
+            <td><button class="btn btn-sm btn-danger" onclick="cancelAssignment(${a.id})">取消分配</button></td>
+          </tr>
+        `).join('');
+      } else {
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">暂无分配记录</td></tr>';
+      }
+    }
+
+    function openSpotModal(spot = null) {
+      if (spot) {
+        document.getElementById('modalTitle').textContent = '✏️ 编辑车位';
+        document.getElementById('spotId').value = spot.id;
+        document.getElementById('spotCode').value = spot.spot_code;
+        document.getElementById('spotArea').value = spot.area || '';
+        document.getElementById('spotFloor').value = spot.floor || '';
+        document.getElementById('spotPrice').value = spot.price || '';
+        document.getElementById('spotRemark').value = spot.remark || '';
+      } else {
+        document.getElementById('modalTitle').textContent = '➕ 添加车位';
+        document.getElementById('spotForm').reset();
+        document.getElementById('spotId').value = '';
+      }
+      document.getElementById('spotModal').style.display = 'flex';
+    }
+
+    function closeSpotModal() {
+      document.getElementById('spotModal').style.display = 'none';
+    }
+
+    document.getElementById('spotForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const id = document.getElementById('spotId').value;
+      const data = {
+        spot_code: document.getElementById('spotCode').value.trim(),
+        area: document.getElementById('spotArea').value.trim(),
+        floor: document.getElementById('spotFloor').value.trim(),
+        price: parseFloat(document.getElementById('spotPrice').value) || 0,
+        remark: document.getElementById('spotRemark').value.trim()
+      };
+
+      let res;
+      if (id) {
+        res = await api(`/admin/parking-spots/${id}`, { method: 'PUT', body: data });
+      } else {
+        res = await api('/admin/parking-spots', { method: 'POST', body: data });
+      }
+
+      if (res.success) {
+        showToast(res.message, 'success');
+        closeSpotModal();
+        await loadSpots();
+      } else {
+        showToast(res.message, 'error');
+      }
+    });
+
+    async function editSpot(id) {
+      const res = await api('/admin/parking-spots');
+      if (res.success) {
+        const spot = res.data.find(s => s.id === id);
+        if (spot) openSpotModal(spot);
+      }
+    }
+
+    async function deleteSpot(id, code) {
+      if (!confirm(`确定要删除车位 "${code}" 吗？`)) return;
+      const res = await api(`/admin/parking-spots/${id}`, { method: 'DELETE' });
+      if (res.success) { showToast(res.message, 'success'); await loadSpots(); }
+      else showToast(res.message, 'error');
+    }
+
+    async function cancelAssignment(id) {
+      if (!confirm('确定要取消此车位分配吗？')) return;
+      const res = await api(`/admin/parking-assignments/${id}`, { method: 'DELETE' });
+      if (res.success) { showToast(res.message, 'success'); await loadAssignments(); await loadSpots(); }
+      else showToast(res.message, 'error');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的处理记录 - 小区车位管理系统</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">🚗 小区车位管理系统</div>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">🏢 工作台</a></li>
+      <li><a href="process-applications.html">📋 处理申请</a></li>
+      <li><a href="my-reviews.html" class="active">✅ 我的处理记录</a></li>
+    </ul>
+    <div class="user-info">
+      <span id="userName">物业代表</span>
+      <span class="role-badge representative">物业代表</span>
+      <button class="btn btn-sm btn-outline" onclick="logout()">退出</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="card">
+      <div class="card-header">
+        <h3>✅ 我的处理记录</h3>
+        <span id="reviewCount" style="color:#999;font-size:14px;"></span>
+      </div>
+      <div id="reviewList" class="message-list">
+        <div class="empty-state"><div class="icon">⏳</div><p>加载中...</p></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../js/main.js"></script>
+  <script>
+    async function init() {
+      const user = await checkLogin();
+      if (!user || user.role !== 'representative') {
+        showToast('请先登录物业代表账号', 'error');
+        setTimeout(() => window.location.href = '/index.html', 500);
+        return;
+      }
+      document.getElementById('userName').textContent = user.name;
+      await loadMyReviews();
+    }
+
+    async function loadMyReviews() {
+      const res = await api('/representative/my-reviews');
+      const container = document.getElementById('reviewList');
+
+      if (res.success && res.data && res.data.length > 0) {
+        document.getElementById('reviewCount').textContent = `共 ${res.data.length} 条记录`;
+        container.innerHTML = res.data.map(r => {
+          const statusClass = r.status === 'approved' ? 'approved' : 'rejected';
+          const statusText = r.status === 'approved' ? '✅ 已通过' : '❌ 已拒绝';
+          return `
+            <div class="message-item" style="border-left-color:${r.status === 'approved' ? '#2ecc71' : '#e74c3c'};">
+              <div class="msg-header">
+                <span class="msg-title">🚗 ${escapeHtml(r.spot_code)}</span>
+                <span class="status-badge ${statusClass}">${statusText}</span>
+              </div>
+              <div class="msg-content">申请人: ${escapeHtml(r.owner_name || '未知')} | 申请理由: ${escapeHtml(r.reason || '无')}</div>
+              ${r.review_comment ? `<div style="margin-top:8px;font-size:13px;color:#666;">审核意见: ${escapeHtml(r.review_comment)}</div>` : ''}
+              <div class="msg-meta">处理时间: ${formatDate(r.reviewed_at)}</div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        document.getElementById('reviewCount').textContent = '';
+        container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>您还没有处理过任何申请</p></div>';
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    init();
+  </script>
+</body>
+</html>

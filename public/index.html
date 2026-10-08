@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>小区车位管理系统 - 登录</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="auth-page">
+  <div class="auth-card">
+    <h2>🚗 小区车位管理系统</h2>
+    <p class="subtitle">欢迎回来，请选择身份登录</p>
+
+    <!-- 身份选择标签 -->
+    <div class="role-tabs">
+      <button class="role-tab active" data-role="owner">🏠 业主</button>
+      <button class="role-tab" data-role="admin">🔧 管理员</button>
+      <button class="role-tab" data-role="representative">🏢 物业代表</button>
+    </div>
+
+    <!-- 登录表单 -->
+    <form id="loginForm">
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" id="loginUsername" placeholder="请输入用户名" required>
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="loginPassword" placeholder="请输入密码" required>
+      </div>
+      <input type="hidden" id="loginRole" value="owner">
+      <button type="submit" class="btn btn-primary">登 录</button>
+    </form>
+
+    <!-- 注册表单（仅业主可注册） -->
+    <div id="registerSection" style="margin-top: 20px;">
+      <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+      <p class="subtitle" style="margin-bottom:15px;">还没有账号？注册业主账号</p>
+      <form id="registerForm">
+        <div class="form-row">
+          <div class="form-group">
+            <label>用户名</label>
+            <input type="text" id="regUsername" placeholder="设置用户名" required>
+          </div>
+          <div class="form-group">
+            <label>密码</label>
+            <input type="password" id="regPassword" placeholder="设置密码" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>真实姓名</label>
+          <input type="text" id="regName" placeholder="请输入真实姓名" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>楼栋号</label>
+            <input type="text" id="regBuilding" placeholder="如：1栋">
+          </div>
+          <div class="form-group">
+            <label>单元/门牌号</label>
+            <input type="text" id="regUnit" placeholder="如：1单元101">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>联系电话</label>
+          <input type="text" id="regPhone" placeholder="请输入联系电话">
+        </div>
+        <button type="submit" class="btn btn-outline" style="width:100%;">注 册</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/main.js"></script>
+  <script>
+    // 身份切换
+    document.querySelectorAll('.role-tab').forEach(tab => {
+      tab.addEventListener('click', function() {
+        document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        document.getElementById('loginRole').value = this.dataset.role;
+
+        // 只有业主显示注册表单
+        const regSection = document.getElementById('registerSection');
+        regSection.style.display = this.dataset.role === 'owner' ? 'block' : 'none';
+      });
+    });
+
+    // 登录
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const role = document.getElementById('loginRole').value;
+      const username = document.getElementById('loginUsername').value;
+      const password = document.getElementById('loginPassword').value;
+
+      const res = await api('/auth/login', {
+        method: 'POST',
+        body: { username, password, role }
+      });
+
+      if (res.success) {
+        showToast('登录成功！', 'success');
+        // 根据角色跳转
+        setTimeout(() => {
+          switch (res.user.role) {
+            case 'admin': window.location.href = 'pages/admin/dashboard.html'; break;
+            case 'owner': window.location.href = 'pages/owner/dashboard.html'; break;
+            case 'representative': window.location.href = 'pages/representative/dashboard.html'; break;
+          }
+        }, 500);
+      } else {
+        showToast(res.message || '登录失败', 'error');
+      }
+    });
+
+    // 注册
+    document.getElementById('registerForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const res = await api('/auth/register', {
+        method: 'POST',
+        body: {
+          username: document.getElementById('regUsername').value,
+          password: document.getElementById('regPassword').value,
+          name: document.getElementById('regName').value,
+          building: document.getElementById('regBuilding').value,
+          unit: document.getElementById('regUnit').value,
+          phone: document.getElementById('regPhone').value
+        }
+      });
+
+      if (res.success) {
+        showToast('注册成功，请登录！', 'success');
+        this.reset();
+      } else {
+        showToast(res.message || '注册失败', 'error');
+      }
+    });
+
+    // 检查是否已登录
+    (async function() {
+      const user = await checkLogin();
+      if (user) {
+        switch (user.role) {
+          case 'admin': window.location.href = 'pages/admin/dashboard.html'; break;
+          case 'owner': window.location.href = 'pages/owner/dashboard.html'; break;
+          case 'representative': window.location.href = 'pages/representative/dashboard.html'; break;
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

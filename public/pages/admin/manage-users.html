@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户管理 - 小区车位管理系统</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">🚗 小区车位管理系统</div>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">📊 工作台</a></li>
+      <li><a href="review-applications.html">📋 审核申请</a></li>
+      <li><a href="manage-users.html" class="active">👥 用户管理</a></li>
+      <li><a href="parking-management.html">� 车位管理</a></li>
+    </ul>
+    <div class="user-info">
+      <span id="userName">管理员</span>
+      <span class="role-badge admin">管理员</span>
+      <button class="btn btn-sm btn-outline" onclick="logout()">退出</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- 业主列表 -->
+    <div class="card">
+      <div class="card-header"><h3>🏠 业主列表</h3></div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>ID</th><th>用户名</th><th>姓名</th><th>楼栋</th><th>单元/门牌</th><th>电话</th><th>注册时间</th><th>操作</th></tr></thead>
+          <tbody id="ownerTableBody"><tr><td colspan="8" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 物业代表列表 -->
+    <div class="card">
+      <div class="card-header"><h3>🏢 物业代表列表</h3></div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>ID</th><th>用户名</th><th>姓名</th><th>部门</th><th>电话</th><th>注册时间</th><th>操作</th></tr></thead>
+          <tbody id="repTableBody"><tr><td colspan="7" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../js/main.js"></script>
+  <script>
+    async function init() {
+      const user = await checkLogin();
+      if (!user || user.role !== 'admin') {
+        showToast('请先登录管理员账号', 'error');
+        setTimeout(() => window.location.href = '/index.html', 500);
+        return;
+      }
+      document.getElementById('userName').textContent = user.name;
+      await loadUsers();
+    }
+
+    async function loadUsers() {
+      const res = await api('/admin/users');
+      if (!res.success) return;
+
+      // 业主列表
+      const ownerBody = document.getElementById('ownerTableBody');
+      if (res.owners.length > 0) {
+        ownerBody.innerHTML = res.owners.map(o => `
+          <tr>
+            <td>${o.id}</td><td>${escapeHtml(o.username)}</td><td>${escapeHtml(o.name)}</td>
+            <td>${escapeHtml(o.building || '-')}</td><td>${escapeHtml(o.unit || '-')}</td>
+            <td>${escapeHtml(o.phone || '-')}</td><td>${formatDate(o.created_at)}</td>
+            <td><button class="btn btn-sm btn-danger" onclick="deleteOwner(${o.id}, '${escapeHtml(o.name)}')">删除</button></td>
+          </tr>
+        `).join('');
+      } else {
+        ownerBody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;">暂无业主</td></tr>';
+      }
+
+      // 物业代表列表
+      const repBody = document.getElementById('repTableBody');
+      if (res.representatives.length > 0) {
+        repBody.innerHTML = res.representatives.map(r => `
+          <tr>
+            <td>${r.id}</td><td>${escapeHtml(r.username)}</td><td>${escapeHtml(r.name)}</td>
+            <td>${escapeHtml(r.department || '-')}</td><td>${escapeHtml(r.phone || '-')}</td>
+            <td>${formatDate(r.created_at)}</td>
+            <td><button class="btn btn-sm btn-danger" onclick="deleteRep(${r.id}, '${escapeHtml(r.name)}')">删除</button></td>
+          </tr>
+        `).join('');
+      } else {
+        repBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">暂无物业代表</td></tr>';
+      }
+    }
+
+    async function deleteOwner(id, name) {
+      if (!confirm(`确定要删除业主 "${name}" 吗？`)) return;
+      const res = await api(`/admin/owners/${id}`, { method: 'DELETE' });
+      if (res.success) { showToast('删除成功', 'success'); await loadUsers(); }
+      else showToast(res.message, 'error');
+    }
+
+    async function deleteRep(id, name) {
+      if (!confirm(`确定要删除物业代表 "${name}" 吗？`)) return;
+      const res = await api(`/admin/representatives/${id}`, { method: 'DELETE' });
+      if (res.success) { showToast('删除成功', 'success'); await loadUsers(); }
+      else showToast(res.message, 'error');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    init();
+  </script>
+</body>
+</html>

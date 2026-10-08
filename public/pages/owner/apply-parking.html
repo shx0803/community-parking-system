@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>申请车位 - 小区车位管理系统</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">🚗 小区车位管理系统</div>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">🏠 工作台</a></li>
+      <li><a href="apply-parking.html" class="active">📝 申请车位</a></li>
+      <li><a href="view-spots.html">🚗 车位查询</a></li>
+      <li><a href="my-parking.html">✅ 我的车位</a></li>
+    </ul>
+    <div class="user-info">
+      <span id="userName">业主</span>
+      <span class="role-badge owner">业主</span>
+      <button class="btn btn-sm btn-outline" onclick="logout()">退出</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="card" style="max-width:700px;margin:0 auto;">
+      <div class="card-header">
+        <h3>📝 申请车位</h3>
+      </div>
+      <p style="color:#999;font-size:13px;margin-bottom:20px;">
+        ⚠️ 提示：选择您想要申请的空闲车位，提交后等待管理员审核。每位业主只能申请一个车位。
+      </p>
+      <form id="applyForm">
+        <div class="form-group">
+          <label>选择车位 *</label>
+          <select id="spotSelect" required>
+            <option value="">请选择空闲车位</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>申请理由</label>
+          <textarea id="applyReason" placeholder="请输入申请理由（可选）..." rows="4"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;padding:12px;font-size:16px;">
+          📤 提交申请
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="../../js/main.js"></script>
+  <script>
+    async function init() {
+      const user = await checkLogin();
+      if (!user || user.role !== 'owner') {
+        showToast('请先登录业主账号', 'error');
+        setTimeout(() => window.location.href = '/index.html', 500);
+        return;
+      }
+      document.getElementById('userName').textContent = user.name;
+      await loadAvailableSpots();
+    }
+
+    async function loadAvailableSpots() {
+      const res = await api('/owner/available-spots');
+      const select = document.getElementById('spotSelect');
+      select.innerHTML = '<option value="">请选择空闲车位</option>';
+
+      if (res.success && res.data && res.data.length > 0) {
+        res.data.forEach(spot => {
+          const option = document.createElement('option');
+          option.value = spot.spot_code;
+          option.textContent = `${spot.spot_code} - ${spot.area || ''} ${spot.floor || ''} - ¥${Number(spot.price || 0).toFixed(2)}/月`;
+          select.appendChild(option);
+        });
+      } else {
+        select.innerHTML = '<option value="">暂无空闲车位</option>';
+      }
+    }
+
+    document.getElementById('applyForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const spot_code = document.getElementById('spotSelect').value;
+      const reason = document.getElementById('applyReason').value.trim();
+
+      if (!spot_code) {
+        showToast('请选择要申请的车位', 'error');
+        return;
+      }
+
+      const res = await api('/owner/apply-parking', {
+        method: 'POST',
+        body: { spot_code, reason }
+      });
+
+      if (res.success) {
+        showToast(res.message, 'success');
+        this.reset();
+      } else {
+        showToast(res.message, 'error');
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>
